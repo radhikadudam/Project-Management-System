@@ -12,30 +12,41 @@ function App() {
   const [taskPriority, setTaskPriority] = useState("medium");
   const [filterStatus, setFilterStatus] = useState("");
   const [editingTask, setEditingTask] = useState(null);
+  const [dueDate, setDueDate] = useState("");
+  const [sortBy, setSortBy] = useState("");
+  const [page, setPage] = useState(1);
+const limit = 5; // or 10
 
   // FETCH PROJECTS
-  const fetchProjects = async () => {
-    const res = await fetch("http://localhost:5000/projects");
-    const data = await res.json();
-    setProjects(data);
-  };
+ const fetchProjects = async (pageNumber = 1) => {
+  const res = await fetch(
+    `http://localhost:5000/projects?page=${pageNumber}&limit=${limit}`
+  );
+  const data = await res.json();
+  setProjects(data);
+};
 
   // FETCH TASKS
-  const fetchTasks = async (projectId, status = "") => {
-    let url = `http://localhost:5000/projects/${projectId}/tasks`;
+ const fetchTasks = async (projectId, status = "", sort = "") => {
+  let url = `http://localhost:5000/projects/${projectId}/tasks`;
 
-    if (status) {
-      url += `?status=${status}`;
-    }
+  let params = [];
 
-    const res = await fetch(url);
-    const data = await res.json();
-    setTasks(data);
-  };
+  if (status) params.push(`status=${status}`);
+  if (sort) params.push(`sort=${sort}`);
 
-  useEffect(() => {
-    fetchProjects();
-  }, []);
+  if (params.length) {
+    url += `?${params.join("&")}`;
+  }
+
+  const res = await fetch(url);
+  const data = await res.json();
+  setTasks(data);
+};
+
+ useEffect(() => {
+  fetchProjects(page);
+}, [page]);
 
   // CREATE PROJECT
   const createProject = async () => {
@@ -75,14 +86,16 @@ function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          title: taskTitle,
-          status: taskStatus,
-          priority: taskPriority,
-        }),
+  title: taskTitle,
+  status: taskStatus,
+  priority: taskPriority,
+  due_date: dueDate, // ✅ ADD THIS
+})
       }
     );
 
     setTaskTitle("");
+    setDueDate("");
     fetchTasks(selectedProject.id);
   };
 
@@ -147,6 +160,21 @@ function App() {
           </div>
         ))}
       </div>
+{/* pagination */}
+      <div style={{ marginTop: "20px" }}>
+  <button onClick={() => setPage(page - 1)} disabled={page === 1}>
+    Prev
+  </button>
+
+  <span style={{ margin: "0 10px" }}>Page {page}</span>
+
+  <button
+  onClick={() => setPage(page + 1)}
+  disabled={projects.length < limit}
+>
+  Next
+</button>
+</div>
 
       {/* TASK SECTION */}
       {selectedProject && (
@@ -178,72 +206,91 @@ function App() {
               <option value="medium">Medium</option>
               <option value="high">High</option>
             </select>
-
+<input
+  type="date"
+  value={dueDate}
+  onChange={(e) => setDueDate(e.target.value)}
+/>
             <button onClick={handleAddTask}>+ Add Task</button>
           </div>
 
           {/* FILTER */}
           <select
-            className="filter"
-            onChange={(e) => {
-              setFilterStatus(e.target.value);
-              fetchTasks(selectedProject.id, e.target.value);
-            }}
-          >
+  className="filter"
+  onChange={(e) => {
+    setFilterStatus(e.target.value);
+    fetchTasks(selectedProject.id, e.target.value, sortBy);
+  }}
+>
             <option value="">All Tasks</option>
             <option value="todo">Todo</option>
             <option value="in-progress">In Progress</option>
             <option value="done">Done</option>
           </select>
-
+{/* sort */}
+<select
+  className="filter"
+  onChange={(e) => {
+    setSortBy(e.target.value);
+    fetchTasks(selectedProject.id, filterStatus, e.target.value);
+  }}
+>
+  <option value="">Sort</option>
+  <option value="due_date">Sort by Due Date</option>
+</select>
           {/* TASK LIST */}
           {tasks.map((t) => (
-            <div className="task-card" key={t.id}>
-              <div>
-                <h4>{t.title}</h4>
-                <span className={`status ${t.status}`}>
-                  {t.status}
-                </span>
-              </div>
+  <div key={t.id}>
+    <div className="task-card">
+      <div>
+        <h4>{t.title}</h4>
+        <span className={`status ${t.status}`}>
+          {t.status}
+        </span>
+        <p>Due: {t.due_date || "N/A"}</p>
+      </div>
 
-              <div className="task-actions">
-                <span className="priority">{t.priority}</span>
+      <div className="task-actions">
+        <span className="priority">{t.priority}</span>
 
-                <button onClick={() => setEditingTask(t)}>Edit</button>
-              </div>
-            </div>
-          ))}
+        <button onClick={() => setEditingTask(t)}>Edit</button>
+      </div>
+    </div>
 
-          {/* EDIT FORM */}
-          {editingTask && (
-            <div className="edit-form">
-              <input
-                value={editingTask.title}
-                onChange={(e) =>
-                  setEditingTask({
-                    ...editingTask,
-                    title: e.target.value,
-                  })
-                }
-              />
+    {/* ✅ EDIT FORM BELOW SELECTED TASK */}
+    {editingTask && editingTask.id === t.id && (
+      <div className="edit-form">
+        <input
+          value={editingTask.title}
+          onChange={(e) =>
+            setEditingTask({
+              ...editingTask,
+              title: e.target.value,
+            })
+          }
+        />
 
-              <select
-                value={editingTask.status}
-                onChange={(e) =>
-                  setEditingTask({
-                    ...editingTask,
-                    status: e.target.value,
-                  })
-                }
-              >
-                <option value="todo">Todo</option>
-                <option value="in-progress">In Progress</option>
-                <option value="done">Done</option>
-              </select>
+        <select
+          value={editingTask.status}
+          onChange={(e) =>
+            setEditingTask({
+              ...editingTask,
+              status: e.target.value,
+            })
+          }
+        >
+          <option value="todo">Todo</option>
+          <option value="in-progress">In Progress</option>
+          <option value="done">Done</option>
+        </select>
 
-              <button onClick={handleUpdateTask}>Update</button>
-            </div>
-          )}
+        <button onClick={handleUpdateTask}>Update</button>
+      </div>
+    )}
+  </div>
+))}
+
+          
         </div>
       )}
     </div>
